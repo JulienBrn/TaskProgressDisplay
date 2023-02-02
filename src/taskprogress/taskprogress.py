@@ -21,6 +21,8 @@ class Progress:
         self.__handler = None
         self.__status=Progress.Status.NOTSTARTED
         self.__type=Progress.Type.PROXY
+        self.__parent=None
+        self.__parent_contrib=1.0
         
     # Common methods for all "Progress"
     @property
@@ -34,7 +36,7 @@ class Progress:
         return 1 + self.__parent.depth if self.__parent else 0
     @property
     def namechain(self) -> List[str]:
-        return self.__parent.namechain + self.name if self.__parent else [self.name]
+        return self.__parent.namechain + [self.name] if self.__parent else [self.name]
     @property
     def fullname(self) -> str:
         return '.'.join(self.namechain)
@@ -57,8 +59,7 @@ class Progress:
         elif self.type == Progress.Type.NUMERIC:
             return self.value/self.max
         elif self.type == Progress.Type.TASK:
-            for s in self.__subtasks.values():
-                return s.percentage*s.parent_contrib
+            return sum([s.percentage*s.parent_contrib for s in self.__subtasks.values()])
     @property
     def parent_contrib(self) -> float:
         return self.__parent_contrib
@@ -81,15 +82,17 @@ class Progress:
         
     def close(self) -> None: 
         self.__status = Progress.Status.CLOSED
-        self.get_used_handler.notify_close(self)
+        self.get_used_handler().notify_close(self)
         
     
     # Methods available only on Proxy Type
-    def start_numeric(self, max: float) ->  None:
+    def start_numeric(self, max: float, unit: str | None = None) ->  None:
         self.__value = 0
         self.__max = max
-        self.type=Progress.Type.NUMERIC
-        self.status=Progress.Status.RUNNING
+        self.__type=Progress.Type.NUMERIC
+        self.__status=Progress.Status.RUNNING
+        if unit:
+            self.__additional_info["unit"]=unit
         self.get_used_handler().notify_numeric_started(self)
         
     def start_subtasks(self, subtasks: List[str] | Dict[str, float | None], extra: Dict[str, Any] = {}) ->  Dict[str, Progress]:
@@ -102,20 +105,21 @@ class Progress:
             if v <0:
                 logger.error("Setting contribution value of subtask {} in progress {} under zero ({}), continuing with zero".format(n, self.fullname, v))
                 subtasks[n]=0
-        filtered=filter(None, subtasks.values())
-        sum=sum(filtered)
-        if sum==0:
+        filtered=list(filter(None, subtasks.values()))
+        msum=sum(filtered)
+        if msum==0:
             subtasks={s:1.0/float(len(subtasks)) for s,v in subtasks.items()}
         else:
-            finalsum=sum*float(len(subtasks))/float(len(filtered))
+            finalsum=msum*float(len(subtasks))/float(len(filtered))
             subtasks={s:v/finalsum if v else 1.0/float(len(subtasks)) for s,v in subtasks.items()}
+        logger.debug("Subtasks are {}".format(subtasks))
         def create_progress(n ,v):
             p = Progress(n, extra[n] if n in extra else {})
             (p.__parent, p.__parent_contrib) = (self, v)
             return p
-        self.__subtasks={n:create_progress(n,v) for n,v in subtasks}    
-        self.type=Progress.Type.TASK
-        self.status=Progress.Status.RUNNING
+        self.__subtasks={n:create_progress(n,v) for n,v in subtasks.items()}    
+        self.__type=Progress.Type.TASK
+        self.__status=Progress.Status.RUNNING
         self.get_used_handler().notify_subtasks_started(self)
         return self.__subtasks
         
@@ -128,22 +132,27 @@ class Progress:
     def value(self):
         return self.__value
     
-    def update(self, val: float):
+    def update(self, val: float = 1.0):
         self.set_value(self.value+val)
     def set_value(self, val: float):
         if val <0:
             logger.error("Setting value of progress {} under zero ({}), continuing with zero".format(self.fullname, val))
             val=0
-        if val>max:
+        if val>self.max:
             logger.error("Setting value of progress {} to {} with is above max ({}), setting value to max".format(self.fullname, val, self.max))
             val=self.max
         self.__value=val
-        self.get_used_handler().notify_value_change(self)
+        self.get_used_handler().notify_numeric_update(self)
     
     #Methods only available on Task Type
     @property 
-    def subtasks(self) -> Dict[str, Progress]: 
+    def subtasks(self) -> Dict[str, Progress]:
+        # logger.debug("Task {}, type {}".format(self, self.type))
         return {n:p for n,p in self.__subtasks.items()}
+    
+    @property
+    def nb_completed(self) -> int:
+        return len(list(filter(lambda x: x.status == Progress.Status.CLOSED, self.__subtasks.values())))
     
     __name: str
     __parent: Progress | None

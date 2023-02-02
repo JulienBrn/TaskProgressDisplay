@@ -16,45 +16,56 @@ Consider an application that handles multiple video files and calls the function
 - `check`: the function that checks the result.
 
 In order to notify progress information in each task, each function is passed an additional parameter: the "Progress" object.
-We then use the `update`, `start_subtasks` and `start_numeric` of the Progress object to notify progress information.
+We then use the `update`, `start_subtasks` and `start_numeric` of the Progress object to notify progress information (where `sleep` is used as a replacement for the actual work).
 
 The result is the following:
 
 ```python
-def conv(x : Progress):
-    x.start_numeric(max=80, unit="frame")
-    for i in range(0, 80):
-        sleep(0.1)
-        x.update()
-    x.close()
-        
-def analyze(x : Progress):
-    x.start_numeric(max=10, unit="frame")
-    for i in range(0, 10):
-        sleep(0.1)
-        x.update()
-    x.close()
-      
-def check(x : Progress):
-    x.start_numeric(max=10, unit="frame")
-    for i in range(0, 10):
-        sleep(0.1)
-        x.update()  
-    x.close()
-        
-def handle_file(f, x : Progress):
-    sub = x.start_subtasks({"Analyzing" : 1, "Converting": 8, "Checking" : 1})
-    analyze(sub["Analyzing"])
-    conv(sub["Converting"])
-    check(sub["Checking"])
-    x.close()
+d
+
+def load(f, p: Progress):
+    video={"nb_frames":100}#Assume video has 100 frames
+    p.start_numeric(max=video["nb_frames"], unit="frame")
+    for i in range(video["nb_frames"]):
+        sleep(0.02) #simulates loading of video
+        p.update()
+    p.close()
+    return video
     
-def handle_files(x : Progress):
+def conv(video, p: Progress):
+    p.start_numeric(max=video["nb_frames"], unit="frame")
+    for i in range(video["nb_frames"]):
+        sleep(0.1)#simulates conversion operations
+        p.update(val=1.0)#We can pass a parameter to update
+    p.close()
+    return {}#In practice, something
+        
+
+      
+def check(video, res, p: Progress):
+    p.start_numeric(max=video["nb_frames"], unit="frame")
+    for i in range(video["nb_frames"]):
+        sleep(0.02)
+        p.update()  
+    p.close()
+    return True
+        
+def handle_file(f, p : Progress):
+    #We assume the conv operation takes 5 times the time of the other operations
+    #You can provide None or simply a List if you want to set a task to average time of the tasks
+    #Only indicative, serves to estimate end of tasks
+    p.start_subtasks({"Loading" : 1, "Converting": 5, "Checking" : 1})
+    video = load(f, p.subtasks["Loading"])
+    res=conv(video, p.subtasks["Converting"])
+    check(video, res, p.subtasks["Checking"])
+    p.close()
+    
+def handle_files(p : Progress):
     files = ["t.txt", "to.txt", "f.txt"]
-    s=x.start_subtasks({("Handling " + f):1 for f in files})
+    p.start_subtasks({("Handling " + f):1 for f in files})
     for f in files:
-        handle_file(f, s["Handling " + f])
-    x.close()
+        handle_file(f, p.subtasks["Handling " + f])
+    p.close()
 
 
 p = Progress("Compressing Files")

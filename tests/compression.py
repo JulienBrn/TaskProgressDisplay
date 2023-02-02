@@ -2,14 +2,20 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/../src")
 
-from taskprogress.taskprogress import Progress
-from progressdisplayer.progressdisplayer import BasicProgressBars
+from task_progress_api.task_progress_api import Progress
+from task_progress_handlers.task_progress_handlers import ProgressBar
 from time import sleep
-import beautifullogger
+
 import logging
 
+try:
+    import beautifullogger
+    beautifullogger.setup() 
+except ImportError as e:
+    pass
+
 logger=logging.getLogger(__name__)
-beautifullogger.setup() 
+
 
 def conv(x : Progress):
     x.start_numeric(max=80, unit="frame")
@@ -48,5 +54,5 @@ def handle_files(x : Progress):
 
 
 p = Progress("Compressing Files")
-p.set_handler(BasicProgressBars())
+p.set_handler(ProgressBar())
 handle_files(p)

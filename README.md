@@ -21,8 +21,6 @@ We then use the `update`, `start_subtasks` and `start_numeric` of the Progress o
 The result is the following:
 
 ```python
-d
-
 def load(f, p: Progress):
     video={"nb_frames":100}#Assume video has 100 frames
     p.start_numeric(max=video["nb_frames"], unit="frame")
@@ -69,7 +67,7 @@ def handle_files(p : Progress):
 
 
 p = Progress("Compressing Files")
-p.set_handler(ProgressBar())
+p.set_handler(ProgressBar()) #For the display part
 handle_files(p)
 ```
 

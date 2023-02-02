@@ -112,7 +112,6 @@ class Progress:
         else:
             finalsum=msum*float(len(subtasks))/float(len(filtered))
             subtasks={s:v/finalsum if v else 1.0/float(len(subtasks)) for s,v in subtasks.items()}
-        logger.debug("Subtasks are {}".format(subtasks))
         def create_progress(n ,v):
             p = Progress(n, extra[n] if n in extra else {})
             (p.__parent, p.__parent_contrib) = (self, v)

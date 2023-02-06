@@ -17,13 +17,14 @@ class Progress:
         
     def __init__(self, name: str, extra: Dict[str, Any]={}):
         self.__name = name
-        self.__additional_info = extra
+        self.additional_info = extra
         self.__handler = None
         self.__status=Progress.Status.NOTSTARTED
         self.__type=Progress.Type.PROXY
         self.__parent=None
         self.__parent_contrib=1.0
-        
+    def __repr__(self):
+            return 'Progress {}'.format(self.fullname) 
     # Common methods for all "Progress"
     @property
     def name(self) -> str: 
@@ -31,6 +32,11 @@ class Progress:
     @property
     def parent(self) -> Progress|None: 
         return self.__parent
+    
+    @property
+    def sibling_index(self) -> int:
+        return list(self.parent.__subtasks.keys()).index(self.__name) if self.parent else 0
+       
     @property
     def depth(self) -> int: 
         return 1 + self.__parent.depth if self.__parent else 0
@@ -66,9 +72,6 @@ class Progress:
     @property
     def root_contrib(self)-> float:
         return self.parent_contrib * self.__parent.root_contrib if self.__parent else 1.0
-    @property
-    def additional_info(self) -> Dict[str, Any]:
-        return self.__additional_info
     
     def set_handler(self, handler: Handler):
         self.__handler=handler
@@ -84,18 +87,22 @@ class Progress:
         self.__status = Progress.Status.CLOSED
         self.get_used_handler().notify_close(self)
         
-    
+    def __enter__(self):pass
+    def __exit__(self, *args):
+        self.close()
+        
     # Methods available only on Proxy Type
-    def start_numeric(self, max: float, unit: str | None = None) ->  None:
+    def start_numeric(self, max: float, unit: str | None = None) ->  Progress:
         self.__value = 0
         self.__max = max
         self.__type=Progress.Type.NUMERIC
         self.__status=Progress.Status.RUNNING
         if unit:
-            self.__additional_info["unit"]=unit
+            self.additional_info["unit"]=unit
         self.get_used_handler().notify_numeric_started(self)
+        return self
         
-    def start_subtasks(self, subtasks: List[str] | Dict[str, float | None], extra: Dict[str, Any] = {}) ->  Dict[str, Progress]:
+    def start_subtasks(self, subtasks: List[str] | Dict[str, float | None], extra: Dict[str, Any] = {}) ->  Progress:
         if isinstance(subtasks, List):
             subtasks={n:None for n in subtasks}
         if len(subtasks)==0:
@@ -120,7 +127,7 @@ class Progress:
         self.__type=Progress.Type.TASK
         self.__status=Progress.Status.RUNNING
         self.get_used_handler().notify_subtasks_started(self)
-        return self.__subtasks
+        return self
         
     #Methods only available on Numeric Type
     @property 
@@ -145,9 +152,16 @@ class Progress:
     
     #Methods only available on Task Type
     @property 
-    def subtasks(self) -> Dict[str, Progress]:
-        # logger.debug("Task {}, type {}".format(self, self.type))
-        return {n:p for n,p in self.__subtasks.items()}
+    def subtasks(self) -> List[Tuple[str, Progress]]:
+        return self.__subtasks.items()
+        # return {n:p for n,p in self.__subtasks.items()}
+
+    def __getitem__(self, subtask: str) -> Progress:
+        return self.__subtasks[subtask]
+    
+    @property 
+    def nb_subtasks(self):
+        return len(self.__subtasks)
     
     @property
     def nb_completed(self) -> int:
@@ -159,7 +173,7 @@ class Progress:
     __type: Progress.Type
     __status: Progress.Status
     __parent_contrib: float
-    __additional_info: Dict[str, Any]
+    additional_info: Dict[str, Any]
     
 class Handler:
     def notify_numeric_started(self, task: Progress):
